@@ -1,0 +1,65 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      /* Zameni sa stvarnim brend fontom projekta. */
+      @font-face {
+        font-family: "Brend";
+        src: url("../public/assets/fonts/Neki-Font-Regular.woff2") format("woff2");
+        font-weight: 400;
+      }
+      @font-face {
+        font-family: "Brend";
+        src: url("../public/assets/fonts/Neki-Font-Medium.woff2") format("woff2");
+        font-weight: 500;
+      }
+      @font-face {
+        font-family: "Brend";
+        src: url("../public/assets/fonts/Neki-Font-Bold.woff2") format("woff2");
+        font-weight: 700;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="c" width="10" height="10"></canvas>
+    <script>
+      const ctx = document.getElementById("c").getContext("2d");
+
+      async function ready() {
+        await Promise.all([
+          document.fonts.load("400 100px Brend"),
+          document.fonts.load("500 100px Brend"),
+          document.fonts.load("700 100px Brend"),
+        ]);
+      }
+
+      function widthAt(text, weight, sizePx) {
+        ctx.font = weight + " " + sizePx + "px Brend";
+        return ctx.measureText(text);
+      }
+
+      // Binarna pretraga velicine fonta (px) cija sirina merenog teksta
+      // odgovara ciljanoj sirini u pikselima (izmereno iz mockup-a).
+      window.fitFontSize = async function (text, weight, targetWidth) {
+        await ready();
+        let lo = 4;
+        let hi = 400;
+        for (let i = 0; i < 40; i++) {
+          const mid = (lo + hi) / 2;
+          const w = widthAt(text, weight, mid).width;
+          if (w < targetWidth) lo = mid;
+          else hi = mid;
+        }
+        const size = Math.round((lo + hi) / 2);
+        const m = widthAt(text, weight, size);
+        return {
+          fontSize: size,
+          measuredWidth: m.width,
+          ascent: m.actualBoundingBoxAscent,
+          descent: m.actualBoundingBoxDescent,
+        };
+      };
+    </script>
+  </body>
+</html>
