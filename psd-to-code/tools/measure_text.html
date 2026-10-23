@@ -3,20 +3,20 @@
   <head>
     <meta charset="utf-8" />
     <style>
-      /* Zameni sa stvarnim brend fontom projekta. */
+      /* Replace with the project's real brand font. */
       @font-face {
-        font-family: "Brend";
-        src: url("../public/assets/fonts/Neki-Font-Regular.woff2") format("woff2");
+        font-family: "Brand";
+        src: url("../public/assets/fonts/Some-Font-Regular.woff2") format("woff2");
         font-weight: 400;
       }
       @font-face {
-        font-family: "Brend";
-        src: url("../public/assets/fonts/Neki-Font-Medium.woff2") format("woff2");
+        font-family: "Brand";
+        src: url("../public/assets/fonts/Some-Font-Medium.woff2") format("woff2");
         font-weight: 500;
       }
       @font-face {
-        font-family: "Brend";
-        src: url("../public/assets/fonts/Neki-Font-Bold.woff2") format("woff2");
+        font-family: "Brand";
+        src: url("../public/assets/fonts/Some-Font-Bold.woff2") format("woff2");
         font-weight: 700;
       }
     </style>
@@ -28,19 +28,19 @@
 
       async function ready() {
         await Promise.all([
-          document.fonts.load("400 100px Brend"),
-          document.fonts.load("500 100px Brend"),
-          document.fonts.load("700 100px Brend"),
+          document.fonts.load("400 100px Brand"),
+          document.fonts.load("500 100px Brand"),
+          document.fonts.load("700 100px Brand"),
         ]);
       }
 
       function widthAt(text, weight, sizePx) {
-        ctx.font = weight + " " + sizePx + "px Brend";
+        ctx.font = weight + " " + sizePx + "px Brand";
         return ctx.measureText(text);
       }
 
-      // Binarna pretraga velicine fonta (px) cija sirina merenog teksta
-      // odgovara ciljanoj sirini u pikselima (izmereno iz mockup-a).
+      // Binary search for the font size (px) at which the measured text width
+      // matches the target width in pixels (measured on the mockup).
       window.fitFontSize = async function (text, weight, targetWidth) {
         await ready();
         let lo = 4;

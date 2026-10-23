@@ -1,31 +1,33 @@
-// Poslati DansHandWriting.otf ima drugacije sirine nekih slova od fonta kojim je
-// radjen PSD (visina/oblik isti). Ovde se iz SVIH tekst-slojeva PSD-a (6 velicina)
-// trazi ispravka sirine (advance) po znaku, u em jedinicama - ista ispravka mora
-// da vazi u svim velicinama, inace nije razlika fonta.
-// Poredjenje je 1D: zbir mastila po kolonama (polozaj slova po x), za svaki red.
-//   npx electron tools/fit_font.cjs   -> materijali/_ref/font_ispravke.json
+// REAL PROJECT EXAMPLE (Fresh Corner quiz, 2026-10): the delivered DansHandWriting.otf has
+// different widths for some letters than the font the PSD was made with (same height/shape).
+// From ALL text layers of the PSD (6 sizes) this searches for a per-character width
+// (advance) correction in em units - the same correction has to hold at every size,
+// otherwise it is not a font difference. Result on that project: per-letter corrections did
+// NOT explain it (the designer's font had kerning pairs) -> ask the client for the real file.
+// The comparison is 1D: sum of ink per column (x position of letters), per line.
+//   npx electron tools/fit_font.cjs [font.otf]   -> materials/_ref/font_corrections.json
 const { app, BrowserWindow } = require("electron");
 const path = require("path");
 const fs = require("fs");
 app.commandLine.appendSwitch("disable-features", "CalculateNativeWinOcclusion");
-const agp = require(path.join(require("os").homedir(), ".claude/skills/psd-u-kod/agpsd.cjs"));
+const agp = require(path.join(require("os").homedir(), ".claude/skills/psd-to-code/agpsd.cjs"));
 agp.initializeCanvas(() => { throw new Error("no canvas"); }, (w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) }));
 const ROOT = path.join(__dirname, "..");
 const FONT = process.argv.find((a) => a.endsWith(".otf")) || path.join(ROOT, "public/assets/fonts/DansHandWriting.otf");
 
-const psd = agp.readPsd(fs.readFileSync(path.join(ROOT, "materijali/Kviz.psd")), { useImageData: true, skipThumbnail: true });
+const psd = agp.readPsd(fs.readFileSync(path.join(ROOT, "materials/Kviz.psd")), { useImageData: true, skipThumbnail: true });
 const layers = {};
 const rec = (l) => { for (const x of l) { if (x.children) rec(x.children); else if (x.text && !layers[x.text.text]) layers[x.text.text] = x; } };
 rec(psd.children);
 
-// Redovi: tekst, velicina, i y-opseg reda u sloju (visereni tekst se deli po prazninama).
+// Lines: text, size, and the line's y range in the layer (multi-line text is split at the gaps).
 const lines = [];
 for (const [txt, l] of Object.entries(layers)) {
   const px = l.text.style.fontSize * l.text.transform[3];
   const parts = txt.split(/[\r\n\u0003]/);
   const im = l.imageData, W = im.width, H = im.height;
   const rowInk = Array.from({ length: H }, (_, y) => { let s = 0; for (let x = 0; x < W; x++) s += im.data[(y * W + x) * 4 + 3]; return s; });
-  // granice redova: za n redova, n-1 najsiromasnijih vrsta u srednjim delovima
+  // line boundaries: for n lines, the n-1 emptiest rows around the expected split points
   const bounds = [0];
   for (let k = 1; k < parts.length; k++) {
     const c = Math.round((H * k) / parts.length), r = Math.round(H / parts.length / 3);
@@ -42,7 +44,7 @@ for (const [txt, l] of Object.entries(layers)) {
 
 app.whenReady().then(async () => {
   const win = new BrowserWindow({ show: false, width: 400, height: 400 });
-  const file = path.join(app.getPath("temp"), "fc-fit.html");
+  const file = path.join(app.getPath("temp"), "fit-font.html");
   fs.writeFileSync(file, `<!doctype html><meta charset="utf-8"><style>@font-face{font-family:"Dans";src:url("file:///${FONT.replace(/\\/g, "/")}")}</style><body></body>`);
   await win.loadFile(file);
   const out = await win.webContents.executeJavaScript(`(async () => {
@@ -50,7 +52,7 @@ app.whenReady().then(async () => {
     const lines = ${JSON.stringify(lines)};
     const cv = document.createElement("canvas"); cv.width = 600; cv.height = 500;
     const c = cv.getContext("2d", { willReadFrequently: true });
-    // profil glifa: zbir alfe po kolonama, crtan u x = 100
+    // glyph profile: sum of alpha per column, drawn at x = 100
     const cache = new Map();
     const glyph = (ch, px) => {
       const k = ch + "|" + px; if (cache.has(k)) return cache.get(k);
@@ -61,7 +63,7 @@ app.whenReady().then(async () => {
     };
     const chars = [...new Set(lines.flatMap((l) => [...l.text]))];
     const delta = Object.fromEntries(chars.map((ch) => [ch, 0]));
-    // profil reda za date ispravke (pocetak prvog slova u x=0)
+    // line profile for the given corrections (start of the first letter at x = 0)
     const render = (l) => {
       const W = l.prof.length + 200; const p = new Float32Array(W); let x = 0;
       for (const ch of l.text) {
@@ -72,7 +74,7 @@ app.whenReady().then(async () => {
       }
       return p;
     };
-    // greska reda: najbolji pomeraj s (PSD kolona x <-> kolona x + s u nasem profilu)
+    // line error: best shift s (PSD column x <-> column x + s in our profile)
     const lineErr = (l) => {
       const r = render(l); const P = l.prof; let best = Infinity;
       for (let s = 30; s <= 90; s += 1) {
@@ -82,8 +84,6 @@ app.whenReady().then(async () => {
       }
       return best;
     };
-    // pomeraj reda: trazi se jednom dobro (sirok opseg), posle oko pronadjenog
-    const total = () => lines.reduce((s, l) => s + lineErr(l), 0);
     const pre = lines.map((l) => ({ text: l.text, px: +l.px.toFixed(1), err: Math.round(lineErr(l)) }));
     const step = 0.004;
     for (let pass = 0; pass < 4; pass++) {
@@ -96,15 +96,15 @@ app.whenReady().then(async () => {
       }
     }
     const post = lines.map((l) => ({ text: l.text, err: Math.round(lineErr(l)) }));
-    // koliko puta se svaki znak pojavljuje i u koliko velicina
+    // how often every character appears and at how many sizes
     const seen = Object.fromEntries(chars.map((ch) => [ch, { n: lines.reduce((s, l) => s + [...l.text].filter((x) => x === ch).length, 0), sizes: [...new Set(lines.filter((l) => l.text.includes(ch)).map((l) => +l.px.toFixed(1)))] }]));
     return { delta, pre, post, seen };
   })()`);
-  const outFile = path.join(ROOT, "materijali/_ref/font_ispravke.json");
+  const outFile = path.join(ROOT, "materials/_ref/font_corrections.json");
   fs.writeFileSync(outFile, JSON.stringify(out, null, 1));
-  console.log("greska po redu (pre -> posle):");
+  console.log("error per line (before -> after):");
   out.pre.forEach((p, i) => console.log("  " + JSON.stringify(p.text).padEnd(40), p.px, p.err, "->", out.post[i].err));
-  console.log("ispravke (em), znak: delta  [pojavljivanja, velicine]");
+  console.log("corrections (em), char: delta  [occurrences, sizes]");
   for (const [ch, d] of Object.entries(out.delta).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])))
     console.log("  " + JSON.stringify(ch), d.toFixed(3), JSON.stringify(out.seen[ch]));
   app.quit();

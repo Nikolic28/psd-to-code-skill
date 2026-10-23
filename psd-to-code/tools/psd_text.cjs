@@ -1,5 +1,5 @@
-// Pun stil svakog tekst-sloja iz PSD-a (tracking, skala, kerning, prored...).
-//   node tools/psd_tekst.cjs materijali/Kviz.psd
+// Full style of every text layer in the PSD (tracking, scale, kerning, leading, runs...).
+//   node tools/psd_text.cjs <file.psd>
 const fs = require("fs"), path = require("path");
 const agp = require(path.join(__dirname, "..", "agpsd.cjs"));
 const psd = agp.readPsd(fs.readFileSync(process.argv[2]), { skipLayerImageData: true, skipCompositeImageData: true, skipThumbnail: true });
@@ -17,4 +17,4 @@ const rec = (list, g) => {
     console.log(" shape:", t.shapeType, JSON.stringify(t.boxBounds || t.bounds || null), "antialias", t.antiAlias);
   }
 };
-for (const g of psd.children) rec(g.children, g.name);
+for (const g of psd.children) rec(g.children || [g], g.name);
